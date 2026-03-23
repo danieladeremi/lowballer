@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Lowballer",
+  "description": "Estimate a funny lowball offer with a dynamic acceptance probability.",
+  "version": "0.1.0",
+  "action": {
+    "default_title": "Lowballer",
+    "default_popup": "popup.html"
+  },
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "*://*.grailed.com/*",
+    "*://*.depop.com/*",
+    "*://*.ebay.com/*",
+    "*://*.poshmark.com/*",
+    "*://*.mercari.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.grailed.com/*",
+        "*://*.depop.com/*",
+        "*://*.ebay.com/*",
+        "*://*.poshmark.com/*",
+        "*://*.mercari.com/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lowballer</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel panel-left">
+      <h1>Lowballer</h1>
+      <p class="tagline">Find a funny offer that still has a real chance of landing.</p>
+
+      <label for="listingPrice">Current listing price ($)</label>
+      <input id="listingPrice" type="number" min="1" step="1" value="240" />
+
+      <label for="retailPrice">Retail price fallback ($, optional)</label>
+      <input id="retailPrice" type="number" min="1" step="1" value="320" />
+
+      <label for="historyInput">Seller history JSON</label>
+      <textarea id="historyInput" spellcheck="false"></textarea>
+
+      <div class="button-row">
+        <button id="loadSampleBtn" type="button">Load Sample History</button>
+        <button id="analyzeBtn" type="button">Analyze</button>
+      </div>
+
+      <p class="hint">Expected shape: array of items with <code>listedPrice</code>, <code>soldPrice</code>, optional <code>retailPrice</code>.</p>
+    </section>
+
+    <section class="panel panel-right">
+      <div class="meter-wrap">
+        <div class="meter-label">Acceptance Chance</div>
+        <div id="acceptanceValue" class="meter-value">--%</div>
+      </div>
+
+      <div class="offer-wrap">
+        <div class="offer-card">
+          <div class="offer-label">Suggested Offer (target 70%)</div>
+          <div id="suggestedOffer" class="offer-value">$--</div>
+        </div>
+        <div class="offer-card">
+          <div class="offer-label">Current Slider Offer</div>
+          <div id="sliderOffer" class="offer-value">$--</div>
+        </div>
+      </div>
+
+      <label for="offerSlider">Offer slider</label>
+      <input id="offerSlider" type="range" min="0" max="100" step="1" value="50" />
+
+      <div class="range-row">
+        <span id="rangeMin">$--</span>
+        <span id="rangeMax">$--</span>
+      </div>
+
+      <div id="modelNotes" class="model-notes"></div>
+    </section>
+  </main>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

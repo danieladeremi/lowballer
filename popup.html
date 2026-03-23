@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lowballer</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel panel-left">
+      <h1>Lowballer</h1>
+      <p class="tagline">Funny offers, calculated with receipts.</p>
+
+      <div class="button-row top-row">
+        <button id="pullFromTabBtn" type="button">Pull From Tab</button>
+        <button id="loadSampleBtn" type="button">Load Sample</button>
+      </div>
+
+      <p id="pageStatus" class="status">Open a supported listing page, then click Pull From Tab.</p>
+
+      <label for="listingPrice">Current listing price ($)</label>
+      <input id="listingPrice" type="number" min="1" step="1" value="240" />
+
+      <label for="retailPrice">Retail fallback ($, optional)</label>
+      <input id="retailPrice" type="number" min="1" step="1" value="320" />
+
+      <label for="historyInput">Seller history JSON</label>
+      <textarea id="historyInput" spellcheck="false"></textarea>
+
+      <div class="button-row">
+        <button id="analyzeBtn" type="button">Analyze</button>
+        <button id="clearBtn" type="button" class="ghost">Clear</button>
+      </div>
+
+      <p class="hint">Expected shape: array with <code>listedPrice</code>, <code>soldPrice</code>, optional <code>retailPrice</code>.</p>
+    </section>
+
+    <section class="panel panel-right">
+      <div class="meter-wrap">
+        <div class="meter-label">Acceptance Chance</div>
+        <div id="acceptanceValue" class="meter-value">--%</div>
+      </div>
+
+      <div class="offer-wrap">
+        <div class="offer-card">
+          <div class="offer-label">Suggested Offer (70%)</div>
+          <div id="suggestedOffer" class="offer-value">$--</div>
+        </div>
+        <div class="offer-card">
+          <div class="offer-label">Slider Offer</div>
+          <div id="sliderOffer" class="offer-value">$--</div>
+        </div>
+      </div>
+
+      <label for="offerSlider">Offer slider</label>
+      <input id="offerSlider" type="range" min="0" max="100" step="1" value="50" />
+
+      <div class="range-row">
+        <span id="rangeMin">$--</span>
+        <span id="rangeMax">$--</span>
+      </div>
+
+      <div id="modelNotes" class="model-notes"></div>
+    </section>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
