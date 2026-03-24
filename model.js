@@ -1,5 +1,9 @@
-export function computeOfferModel({ listingPrice, retailPrice, sales }) {
-  let anchor = toPositiveNumber(listingPrice) ?? toPositiveNumber(retailPrice);
+export function computeOfferModel({ listingPrice, purchasePrice, retailPrice, sales }) {
+  const listingAnchor = toPositiveNumber(listingPrice);
+  const purchaseAnchor = toPositiveNumber(purchasePrice);
+  const usePurchaseCap = !listingAnchor && Boolean(purchaseAnchor);
+
+  let anchor = listingAnchor ?? purchaseAnchor ?? toPositiveNumber(retailPrice);
   if (!anchor && Array.isArray(sales) && sales.length) {
     const historicalSolds = sales
       .map((sale) => toPositiveNumber(sale.soldPrice))
@@ -28,29 +32,52 @@ export function computeOfferModel({ listingPrice, retailPrice, sales }) {
   const p70 = percentile(ratios, 0.7);
   const p90 = percentile(ratios, 0.9);
 
-  const rangeMinRatio = clamp(p10 - 0.05, 0.25, 1.05);
+  // Always allow users to push as low as an 80% discount (offer = 20% of anchor).
+  const rangeMinRatio = 0.2;
   const rangeMaxRatio = clamp(p90 + 0.05, rangeMinRatio + 0.05, 1.1);
+  const purchaseCap = usePurchaseCap ? roundDollar(purchaseAnchor) : null;
+
+  let minOffer = roundDollar(anchor * rangeMinRatio);
+  let maxOffer = roundDollar(anchor * rangeMaxRatio);
+  if (purchaseCap) {
+    maxOffer = purchaseCap;
+  }
+  if (minOffer > maxOffer) {
+    minOffer = maxOffer;
+  }
+
+  const suggestedOffer = clamp(roundDollar(anchor * p70), minOffer, maxOffer);
 
   return {
     anchor,
+    purchaseCap,
     ratios,
     usedFallbackRatios: usingFallbackRatios,
     stats,
-    suggestedOffer: roundDollar(anchor * p70),
-    minOffer: roundDollar(anchor * rangeMinRatio),
-    maxOffer: roundDollar(anchor * rangeMaxRatio)
+    suggestedOffer,
+    minOffer,
+    maxOffer
   };
 }
 
 export function estimateAcceptanceProbability(offer, model) {
+  if (Number.isFinite(model?.purchaseCap) && offer >= model.purchaseCap) {
+    return 1;
+  }
+
   const ratio = offer / model.anchor;
-  const bandwidth = Math.max(0.03, model.stats.stdDev * 0.8);
+  const empiricalCdf =
+    model.ratios.filter((historicalRatio) => historicalRatio <= ratio).length / model.ratios.length;
+
+  // Keep only light smoothing so probabilities remain close to observed history.
+  const bandwidth = Math.max(0.015, Math.min(0.04, model.stats.stdDev * 0.15));
   const smoothCdf = model.ratios.reduce((acc, historicalRatio) => {
     const z = (ratio - historicalRatio) / bandwidth;
     return acc + sigmoid(z);
   }, 0) / model.ratios.length;
 
-  return clamp(smoothCdf, 0.01, 0.99);
+  const blended = empiricalCdf * 0.7 + smoothCdf * 0.3;
+  return clamp(blended, 0.0001, 0.99);
 }
 
 export function money(value) {

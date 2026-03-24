@@ -12,20 +12,15 @@
       <h1>Lowballer</h1>
       <p class="tagline">Funny offers, calculated with receipts.</p>
 
-      <div class="button-row top-row">
-        <button id="autoAnalyzeBtn" type="button">Auto Analyze</button>
-        <button id="pullFromTabBtn" type="button">Pull From Tab</button>
-      </div>
-      <div class="button-row">
-        <button id="openReviewsBtn" type="button" class="ghost hidden">Open Seller Reviews</button>
-        <button id="crawlGrailedBtn" type="button" class="ghost hidden">Crawl Grailed Reviews</button>
+      <div class="button-row top-row single">
+        <button id="autoAnalyzeBtn" type="button">Lowball</button>
       </div>
       <div class="button-row">
         <button id="toggleAdvancedBtn" type="button" class="ghost">Show Advanced</button>
         <button id="loadSampleBtn" type="button" class="ghost">Load Sample</button>
       </div>
 
-      <p id="pageStatus" class="status">Open a supported listing page, then click Pull From Tab.</p>
+      <p id="pageStatus" class="status">Open a supported listing page, then click Lowball.</p>
 
       <div id="advancedPanel" class="hidden">
         <label for="listingPrice">Current listing price ($)</label>
@@ -70,6 +65,13 @@
         <span id="rangeMin">$--</span>
         <span id="rangeMax">$--</span>
       </div>
+
+      <section class="traits-wrap">
+        <div class="traits-label">Seller Traits</div>
+        <div id="sellerTraits" class="traits-list">
+          <span class="trait-empty">Run Lowball to profile seller behavior.</span>
+        </div>
+      </section>
 
       <div id="modelNotes" class="model-notes"></div>
     </section>

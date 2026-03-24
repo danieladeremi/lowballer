@@ -23,6 +23,7 @@
     const itemName = extractItemName(site);
     const seller = extractSellerInfo(site);
     const listingPrice = extractListingPrice(site);
+    const purchasePrice = extractPurchasePrice(site);
     const soldPrice = site === "grailed" ? extractGrailedSoldPrice() : null;
     const retailPrice = extractRetailPrice(site);
     const history = extractHistoryCandidates(site);
@@ -35,11 +36,14 @@
       profileUrl: seller?.profileUrl ?? null,
       reviewsUrl: seller?.reviewsUrl ?? null,
       listingPrice,
+      purchasePrice,
       soldPrice,
       retailPrice,
       history
     };
   }
+
+  let grailedNextDataCache = null;
 
   function detectSite(host) {
     if (host.includes("grailed")) return "grailed";
@@ -51,6 +55,11 @@
   }
 
   function extractItemName(site) {
+    if (site === "grailed") {
+      const listing = getGrailedListingFromNextData();
+      if (listing?.title) return String(listing.title);
+    }
+
     const fromSiteSelector = firstTextBySelectors(siteTitleSelectors[site] ?? []);
     if (fromSiteSelector) return fromSiteSelector;
 
@@ -61,6 +70,17 @@
 
   function extractSellerInfo(site) {
     if (site !== "grailed") return null;
+
+    const listing = getGrailedListingFromNextData();
+    if (listing?.seller?.username) {
+      const username = String(listing.seller.username);
+      const profileUrl = `https://www.grailed.com/${username}`;
+      return {
+        username,
+        profileUrl,
+        reviewsUrl: `${profileUrl}/feedback`
+      };
+    }
 
     const reviewLink = document.querySelector("a[href*='/feedback'], a[href*='/reviews']");
     const profileLink =
@@ -100,7 +120,24 @@
     );
   }
 
+  function extractPurchasePrice(site) {
+    if (site === "grailed") {
+      const grailed = extractGrailedPurchasePrice();
+      if (grailed) return grailed;
+    }
+
+    return readPriceAfterLabel([
+      "purchase price",
+      "price paid",
+      "buyer paid"
+    ]);
+  }
+
   function extractGrailedListingPrice() {
+    const listing = getGrailedListingFromNextData();
+    const nextPrice = parseMoneyNumber(listing?.price);
+    if (nextPrice) return nextPrice;
+
     const scopedSelectors = [
       "[class*='MainContent_rightColumn'] [class*='Sidebar_price'] span[data-testid='Current']",
       "[class*='MainContent_rightColumn'] [class*='Price_large'] span[data-testid='Current']",
@@ -173,6 +210,14 @@
   }
 
   function extractGrailedSoldPrice() {
+    const listing = getGrailedListingFromNextData();
+    if (listing && listing.sold) {
+      const baseSold = parseMoneyNumber(listing.soldPrice);
+      if (baseSold) {
+        return baseSold;
+      }
+    }
+
     return readPriceAfterLabel([
       "sold price including shipping",
       "sold price",
@@ -181,7 +226,41 @@
     ]);
   }
 
+  function extractGrailedPurchasePrice() {
+    const listing = getGrailedListingFromNextData();
+
+    const directFromNext = [
+      listing?.purchasePrice,
+      listing?.purchase_price,
+      listing?.purchasedPrice,
+      listing?.buyerPaid
+    ]
+      .map((value) => parseMoneyNumber(value))
+      .find((value) => Number.isFinite(value));
+    if (directFromNext) {
+      return directFromNext;
+    }
+
+    if (listing?.sold) {
+      const sold = parseMoneyNumber(listing?.soldPrice);
+      if (sold) {
+        return sold;
+      }
+    }
+
+    return readPriceAfterLabel([
+      "purchase price",
+      "price paid",
+      "buyer paid"
+    ]);
+  }
+
   function extractRetailPrice(site) {
+    if (site === "grailed") {
+      const fromDescription = extractRetailPriceFromGrailedDescription();
+      if (fromDescription) return fromDescription;
+    }
+
     const siteSpecific = priceFromSelectors(siteRetailSelectors[site]);
     if (siteSpecific) return siteSpecific;
 
@@ -340,7 +419,7 @@
   }
 
   function toHistoryRecord(obj) {
-    const listedPrice = pickNumber(obj, ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount"]);
+    const listedPrice = pickNumber(obj, ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount", "purchasePrice", "purchase_price", "purchasedPrice"]);
     const soldPrice = pickNumber(obj, ["soldPrice", "salePrice", "finalPrice", "sold_amount", "sold_price", "price_sold", "accepted_offer_amount"]);
     const retailPrice = pickNumber(obj, ["retailPrice", "msrp", "rrp", "original_retail", "original_price"]);
     const title = pickString(obj, ["title", "name", "item_name", "slug"]);
@@ -530,9 +609,51 @@
   }
 
   function extractGrailedReviewLinksPayload() {
-    const links = Array.from(document.querySelectorAll("a[href*='/listings/']"))
+    const isFeedbackPage = /\/feedback(?:\/|$)/i.test(location.pathname);
+    if (!isFeedbackPage) {
+      return {
+        site: "grailed",
+        links: [],
+        reviewsCount: null,
+        error: "Not on a Grailed feedback page."
+      };
+    }
+
+    // Primary strategy: explicitly target known seller-rating listing anchors.
+    const preferredLinkSelectors = [
+      "a[class*='SellerRating-module__listingImg'][href*='/listings/']",
+      "a[class*='SellerRating-module__designerAndTitle'][href*='/listings/']",
+      "a[class*='SellerRating_listingImg'][href*='/listings/']",
+      "a[class*='SellerRating_designerAndTitle'][href*='/listings/']"
+    ];
+    let links = preferredLinkSelectors
+      .flatMap((selector) => Array.from(document.querySelectorAll(selector)))
       .map((a) => absolutizeUrl(a.getAttribute("href")))
       .filter(Boolean);
+
+    // Secondary strategy: only collect listing links contained in seller-rating review cards.
+    const cardSelectors = [
+      "[class*='SellerRating-module__sellerRating']",
+      "[class*='SellerRating_sellerRating']",
+      "[class*='SellerRating_container']"
+    ];
+    if (!links.length) {
+      const reviewCards = cardSelectors
+        .flatMap((selector) => Array.from(document.querySelectorAll(selector)));
+      for (const card of reviewCards) {
+        const cardLinks = Array.from(card.querySelectorAll("a[href*='/listings/']"))
+          .map((a) => absolutizeUrl(a.getAttribute("href")))
+          .filter(Boolean);
+        links.push(...cardLinks);
+      }
+    }
+
+    // Fallback for layout variations if card classes change.
+    if (!links.length) {
+      links = Array.from(document.querySelectorAll("a[href*='/listings/'][rel='nofollow']"))
+        .map((a) => absolutizeUrl(a.getAttribute("href")))
+        .filter(Boolean);
+    }
 
     const unique = [...new Set(links)];
     const reviewsCount = readReviewsCountFromPage();
@@ -557,14 +678,54 @@
       return { error: "Not on a Grailed page." };
     }
 
+    const listing = getGrailedListingFromNextData();
     return {
       site,
       url: location.href,
       itemName: extractItemName(site),
       listingPrice: extractGrailedListingPrice(),
+      purchasePrice: extractGrailedPurchasePrice(),
       soldPrice: extractGrailedSoldPrice(),
-      retailPrice: extractRetailPrice(site)
+      retailPrice: extractRetailPrice(site),
+      soldAt: listing?.soldAt ?? null
     };
+  }
+
+  function getGrailedNextData() {
+    if (grailedNextDataCache) return grailedNextDataCache;
+    const script = document.querySelector("script#__NEXT_DATA__");
+    if (!script?.textContent?.trim()) return null;
+    try {
+      grailedNextDataCache = JSON.parse(script.textContent);
+      return grailedNextDataCache;
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function getGrailedListingFromNextData() {
+    const next = getGrailedNextData();
+    return next?.props?.pageProps?.listing ?? null;
+  }
+
+  function extractRetailPriceFromGrailedDescription() {
+    const listing = getGrailedListingFromNextData();
+    const description = listing?.description;
+    if (!description || typeof description !== "string") return null;
+
+    const compact = description.replace(/\s+/g, " ");
+    const patterns = [
+      /(?:retail|msrp|rrp|bought for|paid)\s*[:\-]?\s*\$?\s*(\d{2,6}(?:[.,]\d{1,2})?)/i,
+      /\$\s*(\d{2,6}(?:[.,]\d{1,2})?)\s*(?:retail|msrp|rrp)/i
+    ];
+
+    for (const pattern of patterns) {
+      const match = compact.match(pattern);
+      if (!match) continue;
+      const parsed = parseMoneyNumber(match[1]);
+      if (parsed) return parsed;
+    }
+    return null;
   }
 
   function escapeRegex(value) {
@@ -654,32 +815,32 @@
 
   const saleKeyMapBySite = {
     grailed: {
-      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount"],
+      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount", "purchasePrice", "purchase_price", "purchasedPrice"],
       soldKeys: ["soldPrice", "salePrice", "finalPrice", "sold_amount", "sold_price", "accepted_offer_amount"],
       retailKeys: ["retailPrice", "msrp", "rrp", "original_retail", "original_price"]
     },
     depop: {
-      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount"],
+      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount", "purchasePrice", "purchase_price", "purchasedPrice"],
       soldKeys: ["soldPrice", "salePrice", "finalPrice", "sold_price", "price_sold"],
       retailKeys: ["retailPrice", "msrp", "rrp", "original_retail", "original_price"]
     },
     etsy: {
-      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount"],
+      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount", "purchasePrice", "purchase_price", "purchasedPrice"],
       soldKeys: ["soldPrice", "salePrice", "finalPrice", "sold_price", "price"],
       retailKeys: ["retailPrice", "msrp", "rrp", "original_retail", "original_price"]
     },
     ebay: {
-      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount"],
+      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount", "purchasePrice", "purchase_price", "purchasedPrice"],
       soldKeys: ["soldPrice", "salePrice", "finalPrice", "sold_price", "currentPrice"],
       retailKeys: ["retailPrice", "msrp", "rrp", "originalPrice", "original_price"]
     },
     facebook_marketplace: {
-      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount"],
+      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount", "purchasePrice", "purchase_price", "purchasedPrice"],
       soldKeys: ["soldPrice", "salePrice", "finalPrice", "price"],
       retailKeys: ["retailPrice", "msrp", "rrp", "originalPrice", "original_price"]
     },
     default: {
-      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount"],
+      listedKeys: ["listedPrice", "list_price", "price", "askingPrice", "originalPrice", "ask", "amount", "purchasePrice", "purchase_price", "purchasedPrice"],
       soldKeys: ["soldPrice", "salePrice", "finalPrice", "sold_amount", "sold_price"],
       retailKeys: ["retailPrice", "msrp", "rrp", "original_retail", "original_price"]
     }

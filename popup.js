@@ -9,9 +9,6 @@ const historyInput = document.getElementById("historyInput");
 const autoAnalyzeBtn = document.getElementById("autoAnalyzeBtn");
 const analyzeBtn = document.getElementById("analyzeBtn");
 const loadSampleBtn = document.getElementById("loadSampleBtn");
-const pullFromTabBtn = document.getElementById("pullFromTabBtn");
-const openReviewsBtn = document.getElementById("openReviewsBtn");
-const crawlGrailedBtn = document.getElementById("crawlGrailedBtn");
 const toggleAdvancedBtn = document.getElementById("toggleAdvancedBtn");
 const clearBtn = document.getElementById("clearBtn");
 const advancedPanel = document.getElementById("advancedPanel");
@@ -22,10 +19,12 @@ const sliderOfferEl = document.getElementById("sliderOffer");
 const offerSlider = document.getElementById("offerSlider");
 const rangeMinEl = document.getElementById("rangeMin");
 const rangeMaxEl = document.getElementById("rangeMax");
+const sellerTraitsEl = document.getElementById("sellerTraits");
 const modelNotes = document.getElementById("modelNotes");
 
 let activeModel = null;
 let activeReviewsUrl = null;
+let activePurchasePrice = null;
 let crawlInProgress = false;
 let autoAnalyzeInProgress = false;
 let advancedVisible = false;
@@ -34,9 +33,6 @@ initialize();
 
 async function initialize() {
   await loadState();
-  if (!historyInput.value.trim()) {
-    historyInput.value = JSON.stringify(sampleHistory, null, 2);
-  }
 
   analyze();
 
@@ -49,9 +45,6 @@ async function initialize() {
     analyze();
   });
 
-  pullFromTabBtn.addEventListener("click", pullFromCurrentTab);
-  openReviewsBtn.addEventListener("click", openSellerReviewsTab);
-  crawlGrailedBtn.addEventListener("click", crawlGrailedReviews);
   toggleAdvancedBtn.addEventListener("click", toggleAdvanced);
   clearBtn.addEventListener("click", clearAll);
 
@@ -80,7 +73,8 @@ async function autoAnalyzeCurrentPage() {
   autoAnalyzeBtn.disabled = true;
 
   try {
-    setStatus("Auto Analyze: pulling listing and seller data...", "ok");
+    clearSeedHistoryIfPresent();
+    setStatus("Lowball: pulling listing and seller data...", "ok");
     const response = await pullFromCurrentTab();
     if (!response) {
       throw new Error("Could not extract listing data from this page.");
@@ -88,15 +82,28 @@ async function autoAnalyzeCurrentPage() {
 
     const activeTab = await getActiveTab();
     const isGrailed = Boolean(activeTab?.url?.includes("grailed.com"));
-    if (isGrailed && activeReviewsUrl) {
-      setStatus("Auto Analyze: crawling seller reviews/listings...", "ok");
-      await crawlGrailedReviews();
+    let crawlRows = 0;
+    if (isGrailed) {
+      let reviewsUrl = activeReviewsUrl ?? response.reviewsUrl ?? null;
+      if (!reviewsUrl && activeTab?.id) {
+        reviewsUrl = await discoverGrailedReviewsUrlFromTab(activeTab.id);
+      }
+      if (!reviewsUrl) {
+        throw new Error("Seller reviews URL not found on this listing.");
+      }
+      setReviewsUrl(reviewsUrl);
+      setStatus("Lowball: crawling seller reviews/listings...", "ok");
+      const crawlResult = await crawlGrailedReviews();
+      crawlRows = crawlResult?.rowsFound ?? 0;
+      if (!crawlRows) {
+        throw new Error("Crawl finished but produced 0 sold rows.");
+      }
     }
 
     analyze();
-    setStatus("Auto Analyze complete.", "ok");
+    setStatus(`Lowball complete. Added ${crawlRows} seller-history rows.`, "ok");
   } catch (error) {
-    setStatus(`Auto Analyze failed: ${error.message}`, "warn");
+    setStatus(`Lowball failed: ${error.message}`, "warn");
   } finally {
     autoAnalyzeInProgress = false;
     autoAnalyzeBtn.disabled = false;
@@ -127,7 +134,13 @@ async function pullFromCurrentTab() {
 
     if (Number.isFinite(response.listingPrice)) {
       listingPriceInput.value = String(Math.round(response.listingPrice));
+    } else {
+      listingPriceInput.value = "";
     }
+
+    activePurchasePrice = Number.isFinite(response.purchasePrice)
+      ? Math.round(response.purchasePrice)
+      : null;
 
     if (Number.isFinite(response.retailPrice)) {
       retailPriceInput.value = String(Math.round(response.retailPrice));
@@ -145,16 +158,19 @@ async function pullFromCurrentTab() {
     if (Number.isFinite(response.soldPrice)) {
       autoRows.push({
         title: response.itemName ?? "Unknown item",
-        listedPrice: Number.isFinite(response.listingPrice) ? response.listingPrice : null,
+        listedPrice: Number.isFinite(response.listingPrice)
+          ? response.listingPrice
+          : (Number.isFinite(response.purchasePrice) ? response.purchasePrice : null),
         soldPrice: response.soldPrice,
         retailPrice: Number.isFinite(response.retailPrice) ? response.retailPrice : null,
-        soldAt: null
+        soldAt: response.soldAt ?? null
       });
     }
 
     if (autoRows.length) {
       const existing = safeParseHistory(historyInput.value);
-      const merged = mergeHistory(existing, normalizeSales(autoRows));
+      const mergeBase = shouldDiscardSeedHistory(existing, autoRows.length) ? [] : existing;
+      const merged = mergeHistory(mergeBase, normalizeSales(autoRows));
       mergedCount = merged.length;
       historyInput.value = JSON.stringify(merged, null, 2);
     }
@@ -164,6 +180,7 @@ async function pullFromCurrentTab() {
       response.sellerUsername ? `seller: ${response.sellerUsername}` : "seller missing",
       response.itemName ? `item: ${response.itemName}` : "item title missing",
       Number.isFinite(response.listingPrice) ? "listing price found" : "listing price missing",
+      Number.isFinite(response.purchasePrice) ? "purchase price found" : "purchase price missing",
       mergedCount ? `${mergedCount} merged history rows` : "no seller history found"
     ];
 
@@ -180,9 +197,11 @@ async function pullFromCurrentTab() {
 
 function analyze() {
   try {
-    const sales = parseSalesFromJsonInput(historyInput.value);
+    const rawHistory = historyInput.value.trim();
+    const sales = rawHistory ? parseSalesFromJsonInput(rawHistory) : [];
     const model = computeOfferModel({
       listingPrice: listingPriceInput.value,
+      purchasePrice: activePurchasePrice,
       retailPrice: retailPriceInput.value,
       sales
     });
@@ -205,10 +224,14 @@ function analyze() {
       model.usedFallbackRatios
         ? `<span class="warn">Seller history too thin, using baseline marketplace fallback ratios.</span>`
         : `Seller-specific ratios detected from extracted history.`,
+      Number.isFinite(model.purchaseCap)
+        ? `Purchase price cap: <strong>${money(model.purchaseCap)}</strong> (acceptance becomes <strong>100%</strong> at this offer).`
+        : `No purchase-price cap detected on this listing.`,
       `Average sold/base ratio: <strong>${(model.stats.mean * 100).toFixed(1)}%</strong>.`,
       `Spread (std dev): <strong>${(model.stats.stdDev * 100).toFixed(1)}%</strong>.`,
       `Suggested offer targets ~<strong>70%</strong> acceptance.`
     ].join("<br>");
+    renderSellerTraits(sales);
   } catch (error) {
     activeModel = null;
     acceptanceValue.textContent = "--%";
@@ -216,6 +239,7 @@ function analyze() {
     sliderOfferEl.textContent = "$--";
     rangeMinEl.textContent = "$--";
     rangeMaxEl.textContent = "$--";
+    renderSellerTraits([]);
     modelNotes.innerHTML = `<span class="warn">${escapeHtml(error.message)}</span>`;
   }
 }
@@ -224,8 +248,9 @@ function renderOfferState(offer, model) {
   const probability = estimateAcceptanceProbability(offer, model);
   const pct = Math.round(probability * 100);
   sliderOfferEl.textContent = money(offer);
-  acceptanceValue.textContent = `${pct}%`;
-  const tone = pct < 50 ? "bad" : pct < 70 ? "neutral" : "good";
+  const isHailMary = probability < 0.01;
+  acceptanceValue.textContent = isHailMary ? "hail mary 😭" : `${pct}%`;
+  const tone = isHailMary ? "hailmary" : (pct < 50 ? "bad" : pct < 70 ? "neutral" : "good");
   acceptanceValue.className = `meter-value ${tone}`.trim();
 }
 
@@ -233,52 +258,62 @@ async function clearAll() {
   listingPriceInput.value = "";
   retailPriceInput.value = "";
   historyInput.value = "";
+  activePurchasePrice = null;
   setStatus("Cleared current values.", "ok");
   setReviewsUrl(null);
   await persistState();
   analyze();
 }
 
-async function openSellerReviewsTab() {
-  if (!activeReviewsUrl) return;
-  await chrome.tabs.create({ url: activeReviewsUrl });
-}
-
 async function crawlGrailedReviews() {
   if (crawlInProgress) return;
   crawlInProgress = true;
-  crawlGrailedBtn.disabled = true;
 
   try {
-    const sourceUrl = activeReviewsUrl ?? (await getActiveTab())?.url ?? "";
-    if (!sourceUrl || !sourceUrl.includes("grailed.com")) {
+    const activeTab = await getActiveTab();
+    const activeUrl = activeTab?.url ?? "";
+    const activeIsFeedback = /\/feedback|\/reviews/i.test(activeUrl);
+
+    let feedbackUrl = activeIsFeedback ? activeUrl : activeReviewsUrl;
+    if (!feedbackUrl && activeTab?.id && /grailed\.com/i.test(activeUrl)) {
+      feedbackUrl = await discoverGrailedReviewsUrlFromTab(activeTab.id);
+      if (feedbackUrl) {
+        setReviewsUrl(feedbackUrl);
+      }
+    }
+
+    if (!feedbackUrl || !feedbackUrl.includes("grailed.com")) {
       throw new Error("Open a Grailed listing or feedback page first.");
     }
 
+    setStatus(`Crawler target: ${feedbackUrl}`, "ok");
+
     let reviewsTab;
     let createdReviewsTab = false;
-    if (/\/feedback|\/reviews/i.test(sourceUrl)) {
-      reviewsTab = await getActiveTab();
+    if (activeIsFeedback) {
+      reviewsTab = activeTab;
     } else {
-      if (!activeReviewsUrl) {
-        throw new Error("Seller reviews URL not found yet. Pull from a Grailed listing first.");
-      }
-      reviewsTab = await chrome.tabs.create({ url: activeReviewsUrl, active: false });
+      reviewsTab = await chrome.tabs.create({ url: feedbackUrl, active: false });
       createdReviewsTab = true;
       await waitForTabComplete(reviewsTab.id, 20000);
     }
 
+    await expandGrailedFeedbackListings(reviewsTab.id);
+
     const linksPayload = await sendMessageToTab(reviewsTab.id, { type: "LOWBALLER_EXTRACT_GRAILED_REVIEW_LINKS" });
+    if (linksPayload?.error) {
+      throw new Error(linksPayload.error);
+    }
     const links = Array.isArray(linksPayload?.links) ? linksPayload.links : [];
     const reviewsCount = Number.isFinite(linksPayload?.reviewsCount) ? linksPayload.reviewsCount : null;
     if (!links.length) {
       throw new Error("No listing links found on this feedback page.");
     }
 
-    const maxLinks = 24;
+    const maxLinks = 25;
     const targetCount = reviewsCount ? Math.min(maxLinks, reviewsCount) : maxLinks;
     const queue = links.slice(0, targetCount);
-    setStatus(`Crawler: found ${links.length} links, scanning ${queue.length}...`, "ok");
+    setStatus(`Crawler: feedback links found ${links.length}, scanning ${queue.length} seller-review listings...`, "ok");
 
     const crawlTab = await chrome.tabs.create({ url: queue[0], active: false });
     const rows = [];
@@ -292,10 +327,12 @@ async function crawlGrailedReviews() {
       if (detail && !detail.error && Number.isFinite(detail.soldPrice)) {
         rows.push({
           title: detail.itemName ?? "Unknown item",
-          listedPrice: Number.isFinite(detail.listingPrice) ? detail.listingPrice : null,
+          listedPrice: Number.isFinite(detail.listingPrice)
+            ? detail.listingPrice
+            : (Number.isFinite(detail.purchasePrice) ? detail.purchasePrice : null),
           soldPrice: detail.soldPrice,
           retailPrice: Number.isFinite(detail.retailPrice) ? detail.retailPrice : null,
-          soldAt: null
+          soldAt: detail.soldAt ?? null
         });
       }
 
@@ -311,18 +348,20 @@ async function crawlGrailedReviews() {
 
     if (rows.length) {
       const existing = safeParseHistory(historyInput.value);
-      const merged = mergeHistory(existing, normalizeSales(rows));
+      const mergeBase = shouldDiscardSeedHistory(existing, rows.length) ? [] : existing;
+      const merged = mergeHistory(mergeBase, normalizeSales(rows));
       historyInput.value = JSON.stringify(merged, null, 2);
       await persistState();
       analyze();
     }
 
     setStatus(`Crawler done: merged ${rows.length} sold rows from Grailed reviews/listings.`, rows.length ? "ok" : "warn");
+    return { rowsFound: rows.length, linksFound: links.length, scanned: queue.length };
   } catch (error) {
     setStatus(`Crawler failed: ${error.message}`, "warn");
+    throw error;
   } finally {
     crawlInProgress = false;
-    crawlGrailedBtn.disabled = false;
   }
 }
 
@@ -333,18 +372,6 @@ function setStatus(text, state) {
 
 function setReviewsUrl(url) {
   activeReviewsUrl = url && /^https?:\/\//.test(url) ? url : null;
-  const canCrawlGrailed = Boolean(activeReviewsUrl && /grailed\.com/i.test(activeReviewsUrl));
-  if (activeReviewsUrl) {
-    openReviewsBtn.classList.remove("hidden");
-  } else {
-    openReviewsBtn.classList.add("hidden");
-  }
-
-  if (canCrawlGrailed) {
-    crawlGrailedBtn.classList.remove("hidden");
-  } else {
-    crawlGrailedBtn.classList.add("hidden");
-  }
 }
 
 async function loadState() {
@@ -355,13 +382,18 @@ async function loadState() {
   listingPriceInput.value = state.listingPrice ?? listingPriceInput.value;
   retailPriceInput.value = state.retailPrice ?? retailPriceInput.value;
   historyInput.value = state.historyInput ?? historyInput.value;
+  const purchaseFromState = Number(state.purchasePrice);
+  activePurchasePrice = Number.isFinite(purchaseFromState) && purchaseFromState > 0
+    ? purchaseFromState
+    : null;
 }
 
 function persistState() {
   const state = {
     listingPrice: listingPriceInput.value,
     retailPrice: retailPriceInput.value,
-    historyInput: historyInput.value
+    historyInput: historyInput.value,
+    purchasePrice: activePurchasePrice
   };
   return chrome.storage.local.set({ [STORAGE_KEY]: state });
 }
@@ -383,6 +415,72 @@ async function sendMessageToTab(tabId, message) {
       files: ["content-script.js"]
     });
     return chrome.tabs.sendMessage(tabId, message);
+  }
+}
+
+async function discoverGrailedReviewsUrlFromTab(tabId) {
+  try {
+    const execution = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const toAbs = (href) => {
+          if (!href) return null;
+          try {
+            return new URL(href, location.origin).toString();
+          } catch (_error) {
+            return null;
+          }
+        };
+
+        const direct = document.querySelector("a[href*='/feedback'], a[href*='/reviews']");
+        const directUrl = toAbs(direct?.getAttribute("href"));
+        if (directUrl) return directUrl;
+
+        const next = document.querySelector("script#__NEXT_DATA__")?.textContent?.trim();
+        if (next) {
+          try {
+            const parsed = JSON.parse(next);
+            const username = parsed?.props?.pageProps?.listing?.seller?.username;
+            if (username) return `https://www.grailed.com/${username}/feedback`;
+          } catch (_error) {
+            // ignore
+          }
+        }
+
+        const profile = document.querySelector("a[href^='https://www.grailed.com/'][rel*='nofollow'], a[href^='/'][rel*='nofollow']");
+        const profileUrl = toAbs(profile?.getAttribute("href"));
+        if (profileUrl) {
+          const path = new URL(profileUrl).pathname.replace(/\/+$/, "");
+          if (path && !path.includes("/listings/") && !path.includes("/feedback")) {
+            return `https://www.grailed.com${path}/feedback`;
+          }
+        }
+
+        return null;
+      }
+    });
+
+    return execution?.[0]?.result ?? null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+async function expandGrailedFeedbackListings(tabId) {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: async () => {
+        const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        for (let i = 0; i < 8; i += 1) {
+          window.scrollTo({ top: document.body.scrollHeight, behavior: "auto" });
+          await pause(450);
+        }
+        window.scrollTo({ top: 0, behavior: "auto" });
+      }
+    });
+  } catch (_error) {
+    // Non-fatal; we'll crawl whatever links are already present.
   }
 }
 
@@ -467,4 +565,194 @@ function mergeHistory(existing, incoming) {
   }
 
   return merged.slice(0, 300);
+}
+
+function shouldDiscardSeedHistory(existingRows, incomingCount) {
+  if (!incomingCount || !existingRows?.length) return false;
+  if (existingRows.length !== sampleHistory.length) return false;
+
+  const existingTitles = new Set(existingRows.map((row) => row.title));
+  return sampleHistory.every((row) => existingTitles.has(row.title));
+}
+
+function clearSeedHistoryIfPresent() {
+  const existing = safeParseHistory(historyInput.value);
+  if (!shouldDiscardSeedHistory(existing, 1)) return;
+  historyInput.value = "[]";
+}
+
+function renderSellerTraits(sales) {
+  if (!sellerTraitsEl) return;
+  const traits = deriveSellerTraits(sales);
+  if (!traits.length) {
+    sellerTraitsEl.innerHTML = `<span class="trait-empty">No clear trait signal yet. Keep crawling more sold rows.</span>`;
+    return;
+  }
+
+  sellerTraitsEl.innerHTML = traits
+    .map((trait) => {
+      const tip = `${trait.meaning} Move: ${trait.move}`;
+      return `<span class="trait-chip ${escapeHtml(trait.tone)}" title="${escapeHtml(tip)}" data-tip="${escapeHtml(tip)}">${escapeHtml(trait.name)}</span>`;
+    })
+    .join("");
+}
+
+function deriveSellerTraits(sales) {
+  const validRows = (Array.isArray(sales) ? sales : [])
+    .map((sale) => {
+      const listedPrice = Number(sale?.listedPrice);
+      const soldPrice = Number(sale?.soldPrice);
+      if (!Number.isFinite(listedPrice) || listedPrice <= 0 || !Number.isFinite(soldPrice) || soldPrice <= 0) {
+        return null;
+      }
+
+      const soldAtMs = Number.isFinite(Date.parse(sale?.soldAt ?? "")) ? Date.parse(sale.soldAt) : null;
+      return {
+        listedPrice,
+        soldPrice,
+        ratio: soldPrice / listedPrice,
+        soldAtMs
+      };
+    })
+    .filter(Boolean);
+
+  if (validRows.length < 5) {
+    return [];
+  }
+
+  const ratios = validRows.map((row) => row.ratio);
+  const ratioStdDev = stdDev(ratios);
+  const ratioMedian = percentile(ratios, 0.5);
+  const deep30Count = validRows.filter((row) => row.ratio <= 0.7).length;
+  const ultraDeepCount = validRows.filter((row) => row.ratio <= 0.6).length;
+  const nearAskRate = validRows.filter((row) => row.ratio >= 0.95).length / validRows.length;
+  const aboveAskRate = validRows.filter((row) => row.ratio > 1).length / validRows.length;
+
+  const traits = [];
+
+  if (deep30Count >= 2 && validRows.length >= 8) {
+    traits.push({
+      name: "Garage Sale",
+      tone: "aggressive",
+      meaning: "Seller has repeatedly accepted 30%+ discounts from asking price.",
+      move: "Open bold and make them counter up to your target."
+    });
+  }
+
+  if (ratioStdDev <= 0.085 && validRows.length >= 8) {
+    traits.push({
+      name: "Metronome",
+      tone: "steady",
+      meaning: "Seller closes deals in a very predictable rhythm.",
+      move: "Anchor near their usual close ratio and resist overbidding."
+    });
+  }
+
+  if (ratioMedian >= 0.95 && nearAskRate >= 0.62 && deep30Count <= 1 && validRows.length >= 8) {
+    traits.push({
+      name: "Iron Wall",
+      tone: "defensive",
+      meaning: "Seller usually protects ask price and caves very little.",
+      move: "Use one clean near-ask offer and skip tiny back-and-forth."
+    });
+  }
+
+  if (aboveAskRate >= 0.08 && validRows.length >= 8) {
+    traits.push({
+      name: "Greedy",
+      tone: "defensive",
+      meaning: "Seller frequently closes at or above listed price.",
+      move: "Lowball only with strong comps, then escalate in small steps."
+    });
+  }
+
+  const datedRows = validRows
+    .filter((row) => Number.isFinite(row.soldAtMs))
+    .sort((a, b) => b.soldAtMs - a.soldAtMs);
+  const trendWindow = Math.min(10, Math.floor(datedRows.length / 2));
+  if (trendWindow >= 4) {
+    const recent = datedRows.slice(0, trendWindow).map((row) => row.ratio);
+    const older = datedRows.slice(trendWindow, trendWindow * 2).map((row) => row.ratio);
+    if (older.length >= 4) {
+      const recentMean = mean(recent);
+      const olderMean = mean(older);
+      if (recentMean <= olderMean - 0.06 && recentMean <= 0.93) {
+        traits.push({
+          name: "Going Bankrupt",
+          tone: "aggressive",
+          meaning: "Recent deals are much softer than older deals.",
+          move: "Press harder than historical averages while the trend is weak."
+        });
+      }
+    }
+  }
+
+  const priceMedian = percentile(validRows.map((row) => row.listedPrice), 0.5);
+  const highRows = validRows.filter((row) => row.listedPrice >= priceMedian);
+  const lowRows = validRows.filter((row) => row.listedPrice < priceMedian);
+  if (highRows.length >= 4 && lowRows.length >= 4) {
+    const highMean = mean(highRows.map((row) => row.ratio));
+    const lowMean = mean(lowRows.map((row) => row.ratio));
+    const splitDelta = lowMean - highMean;
+
+    if (splitDelta >= 0.06) {
+      traits.push({
+        name: "Heavyweight Helper",
+        tone: "aggressive",
+        meaning: "Seller gives bigger percentage discounts on pricier items.",
+        move: "Aim lower on expensive listings because they bend there most."
+      });
+    } else if (splitDelta <= -0.06) {
+      traits.push({
+        name: "Lightweight Legend",
+        tone: "aggressive",
+        meaning: "Seller gives bigger percentage discounts on cheaper items.",
+        move: "Push harder on lower-ticket pieces and accessories."
+      });
+    }
+  }
+
+  if (ultraDeepCount >= 2 || deep30Count >= 4) {
+    traits.push({
+      name: "Pleaseeee Buy",
+      tone: "aggressive",
+      meaning: "Seller has accepted panic-level discounts multiple times.",
+      move: "Start very low, then walk up slowly only if needed."
+    });
+  }
+
+  return dedupeTraits(traits).slice(0, 5);
+}
+
+function dedupeTraits(traits) {
+  const seen = new Set();
+  return traits.filter((trait) => {
+    const key = trait.name;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function mean(values) {
+  if (!values.length) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function stdDev(values) {
+  if (!values.length) return 0;
+  const avg = mean(values);
+  const variance = values.reduce((sum, value) => sum + (value - avg) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function percentile(values, p) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo];
+  const t = idx - lo;
+  return sorted[lo] * (1 - t) + sorted[hi] * t;
 }

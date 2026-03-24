@@ -119,6 +119,10 @@ button.ghost {
   gap: 8px;
 }
 
+.button-row.single {
+  grid-template-columns: 1fr;
+}
+
 .top-row {
   margin-top: 0;
 }
@@ -202,6 +206,94 @@ input[type="range"] {
   font-size: 0.88rem;
 }
 
+.traits-wrap {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #35557c;
+}
+
+.traits-label {
+  font-weight: 700;
+  color: #d4e2f5;
+  font-size: 0.9rem;
+}
+
+.traits-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trait-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #35658d;
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: linear-gradient(180deg, #19304a, #11253a);
+  color: #d8ecff;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: help;
+}
+
+.trait-chip.aggressive {
+  border-color: #2f8366;
+  background: linear-gradient(180deg, #1b3e39, #122c27);
+  color: #cdfbe9;
+}
+
+.trait-chip.defensive {
+  border-color: #8c5e45;
+  background: linear-gradient(180deg, #46301e, #352417);
+  color: #ffe7c8;
+}
+
+.trait-chip.steady {
+  border-color: #466f92;
+  background: linear-gradient(180deg, #1a3146, #122737);
+  color: #d5ecff;
+}
+
+.trait-chip::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  bottom: calc(100% + 10px);
+  transform: translateY(6px);
+  width: 230px;
+  max-width: 260px;
+  border: 1px solid #3f5d80;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #0f1b2b, #0a1422);
+  color: #d8e9fa;
+  font-size: 0.77rem;
+  line-height: 1.35;
+  white-space: normal;
+  letter-spacing: normal;
+  text-transform: none;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.trait-chip:hover::after,
+.trait-chip:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.trait-empty {
+  color: #91a8c3;
+  font-size: 0.84rem;
+}
+
 .model-notes {
   margin-top: 10px;
   border-top: 1px dashed #35557c;
@@ -223,6 +315,13 @@ input[type="range"] {
 .bad {
   color: var(--bad);
   text-shadow: 0 0 12px rgba(255, 90, 118, 0.28);
+}
+
+.hailmary {
+  color: var(--bad);
+  font-size: 1.28rem;
+  text-shadow: 0 0 10px rgba(255, 90, 118, 0.28);
+  letter-spacing: 0.02em;
 }
 
 .warn {

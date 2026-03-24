@@ -12,7 +12,9 @@ export const sampleHistory = [
 export function normalizeSales(rawItems) {
   return rawItems
     .map((item) => {
-      const listedPrice = toNumber(item.listedPrice ?? item.originalPrice ?? item.askingPrice);
+      const listedPrice = toNumber(
+        item.listedPrice ?? item.originalPrice ?? item.askingPrice ?? item.purchasePrice ?? item.purchase_price ?? item.purchasedPrice
+      );
       const soldPrice = toNumber(item.soldPrice ?? item.finalPrice ?? item.salePrice);
       const retailPrice = toNumber(item.retailPrice ?? item.msrp);
       return {
