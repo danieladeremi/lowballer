@@ -5,18 +5,22 @@ Lowballer estimates a "funny but plausible" lowball offer by modeling seller his
 ## What works now
 
 - Popup UI with offer suggestion + live acceptance probability slider.
+- Auto-first mode: one-click `Auto Analyze` for listing + seller crawl workflow.
 - 70% target suggested offer from historical sold/base ratios.
 - Base price logic: listing price first, retail fallback if listing is missing.
 - "Pull From Tab" on supported sites to extract likely listing price and any detectable history candidates.
+- Grailed helper flow: detects seller/profile and can open seller reviews directly from popup.
+- Grailed crawler flow: from feedback page, iterates listing links and merges sold-price + retail hints.
+- Advanced manual inputs are hidden by default and optional.
 - Local state persistence with `chrome.storage.local`.
 
 ## Supported hosts (current manifest)
 
-- `*.grailed.com`
-- `*.depop.com`
-- `*.ebay.com`
-- `*.poshmark.com`
-- `*.mercari.com`
+- `grailed.com` + `*.grailed.com`
+- `depop.com` + `*.depop.com`
+- `etsy.com` + `*.etsy.com`
+- `ebay.com` + `www.ebay.com` + `*.ebay.com`
+- `facebook.com/marketplace/*` (+ `www`/`m` subdomains)
 
 ## Install locally (Load Unpacked)
 
@@ -54,4 +58,4 @@ Lowballer estimates a "funny but plausible" lowball offer by modeling seller his
 
 ## Next build step (recommended)
 
-Add per-site adapters in `content-script.js` with explicit selectors/JSON paths for each platform so extraction is much more accurate than generic heuristics.
+Harden each per-site adapter with real page snapshots and selector tests so extraction survives UI changes.

@@ -1,11 +1,15 @@
 :root {
-  --bg: #f2f0ea;
-  --ink: #1d1f21;
-  --accent-soft: #f8d7b5;
-  --panel: #fffaf2;
-  --border: #d8c9b6;
-  --good: #2f855a;
-  --warn: #b8322a;
+  --bg: #0a111c;
+  --bg-soft: #0f1928;
+  --panel: #121f31;
+  --panel-2: #18283d;
+  --border: #284161;
+  --ink: #e3eefb;
+  --muted: #8fa4bf;
+  --accent: #26c3ff;
+  --good: #20d38c;
+  --neutral: #ffb84a;
+  --bad: #ff5a76;
 }
 
 * {
@@ -14,44 +18,49 @@
 
 body {
   margin: 0;
-  width: 760px;
+  width: 780px;
   max-width: 100%;
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  background: radial-gradient(circle at top right, #fdf6ea, var(--bg) 45%, #ece8df 100%);
+  font-family: "Rajdhani", "IBM Plex Sans", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at 20% 0%, #102743 0%, var(--bg) 52%, #050a11 100%);
   color: var(--ink);
 }
 
 .app-shell {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
   padding: 12px;
 }
 
 .panel {
-  background: var(--panel);
-  border: 2px solid var(--border);
+  background: linear-gradient(180deg, var(--panel) 0%, var(--bg-soft) 100%);
+  border: 1px solid var(--border);
   border-radius: 14px;
   padding: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 12px 30px rgba(0, 0, 0, 0.3);
 }
 
 h1 {
-  margin: 0 0 2px;
-  font-family: "Space Grotesk", "Segoe UI", sans-serif;
-  font-size: 1.4rem;
+  margin: 0;
+  font-family: "Orbitron", "Space Grotesk", "Segoe UI", sans-serif;
+  font-size: 1.45rem;
+  letter-spacing: 0.04em;
+  color: #d7e7fb;
 }
 
 .tagline {
-  margin: 0 0 12px;
-  color: #525252;
-  font-size: 0.9rem;
+  margin: 2px 0 12px;
+  color: var(--muted);
+  font-size: 0.92rem;
 }
 
 label {
   display: block;
   margin: 8px 0 5px;
   font-size: 0.9rem;
+  letter-spacing: 0.02em;
   font-weight: 700;
+  color: #d3e2f5;
 }
 
 input[type="number"],
@@ -63,37 +72,44 @@ input[type="range"] {
 
 input[type="number"],
 textarea {
-  border: 1px solid var(--border);
+  border: 1px solid #2e4f77;
   border-radius: 10px;
   padding: 8px;
-  font-size: 0.9rem;
-  background: #fff;
+  font-size: 0.92rem;
+  color: var(--ink);
+  background: #0a1523;
+}
+
+input[type="number"]:focus,
+textarea:focus {
+  outline: 1px solid #3f90d6;
 }
 
 textarea {
   min-height: 160px;
   resize: vertical;
-  font-family: "JetBrains Mono", Consolas, monospace;
+  font-family: "IBM Plex Mono", Consolas, monospace;
 }
 
 button {
-  border: none;
+  border: 1px solid #255f96;
   border-radius: 10px;
-  background: var(--ink);
-  color: #fff;
+  background: linear-gradient(180deg, #173f62, #102b43);
+  color: #e7f3ff;
   padding: 9px 10px;
   font-weight: 700;
+  letter-spacing: 0.02em;
   cursor: pointer;
 }
 
 button:hover {
-  filter: brightness(1.06);
+  filter: brightness(1.08);
 }
 
 button.ghost {
-  background: #f2ede3;
-  color: #3f3f3f;
-  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #2a3040, #1d2230);
+  border-color: #4a5568;
+  color: #dbe7f6;
 }
 
 .button-row {
@@ -109,26 +125,27 @@ button.ghost {
 
 .hint {
   margin: 10px 0 0;
-  color: #5f5f5f;
+  color: var(--muted);
   font-size: 0.82rem;
 }
 
 .status {
   margin: 8px 0 4px;
   font-size: 0.82rem;
-  color: #5b5b5b;
+  color: var(--muted);
 }
 
 .status.ok {
-  color: #2f855a;
+  color: var(--good);
 }
 
 .status.warn {
-  color: var(--warn);
+  color: var(--bad);
 }
 
 .meter-wrap {
-  background: linear-gradient(135deg, var(--accent-soft), #fff1dc);
+  background: linear-gradient(140deg, #102338, #0d1a2a);
+  border: 1px solid #2a4769;
   border-radius: 12px;
   padding: 10px;
 }
@@ -136,12 +153,15 @@ button.ghost {
 .meter-label {
   font-weight: 700;
   font-size: 0.9rem;
+  color: #afc4de;
 }
 
 .meter-value {
-  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  font-family: "Orbitron", "Space Grotesk", "Segoe UI", sans-serif;
   font-size: 2rem;
   font-weight: 700;
+  color: #dfefff;
+  text-shadow: 0 0 14px rgba(38, 195, 255, 0.15);
 }
 
 .offer-wrap {
@@ -155,11 +175,11 @@ button.ghost {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px;
-  background: #fff;
+  background: linear-gradient(180deg, var(--panel-2), #121c2a);
 }
 
 .offer-label {
-  color: #5d5d5d;
+  color: #99b2ce;
   font-size: 0.82rem;
 }
 
@@ -167,35 +187,62 @@ button.ghost {
   margin-top: 4px;
   font-size: 1.35rem;
   font-weight: 700;
+  color: #f1f7ff;
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
 }
 
 .range-row {
   margin-top: 8px;
   display: flex;
   justify-content: space-between;
-  color: #5d5d5d;
+  color: #93abc4;
   font-size: 0.88rem;
 }
 
 .model-notes {
   margin-top: 10px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px dashed #35557c;
   padding-top: 10px;
-  color: #444;
+  color: #c0d3e8;
   font-size: 0.88rem;
 }
 
 .good {
   color: var(--good);
+  text-shadow: 0 0 12px rgba(32, 211, 140, 0.28);
+}
+
+.neutral {
+  color: var(--neutral);
+  text-shadow: 0 0 12px rgba(255, 184, 74, 0.24);
+}
+
+.bad {
+  color: var(--bad);
+  text-shadow: 0 0 12px rgba(255, 90, 118, 0.28);
 }
 
 .warn {
-  color: var(--warn);
+  color: var(--bad);
+}
+
+.hidden {
+  display: none;
+}
+
+code {
+  background: rgba(23, 45, 70, 0.8);
+  border: 1px solid #2f547b;
+  border-radius: 4px;
+  padding: 0 4px;
 }
 
 @media (max-width: 700px) {
   body {
-    width: 420px;
+    width: 430px;
   }
 
   .app-shell {

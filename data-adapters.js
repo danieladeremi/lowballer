@@ -23,7 +23,7 @@ export function normalizeSales(rawItems) {
         soldAt: item.soldAt ? String(item.soldAt) : null
       };
     })
-    .filter((item) => Number.isFinite(item.soldPrice) && (Number.isFinite(item.listedPrice) || Number.isFinite(item.retailPrice)));
+    .filter((item) => Number.isFinite(item.soldPrice));
 }
 
 export function parseSalesFromJsonInput(jsonText) {

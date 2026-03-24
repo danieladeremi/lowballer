@@ -13,27 +13,37 @@
       <p class="tagline">Funny offers, calculated with receipts.</p>
 
       <div class="button-row top-row">
+        <button id="autoAnalyzeBtn" type="button">Auto Analyze</button>
         <button id="pullFromTabBtn" type="button">Pull From Tab</button>
-        <button id="loadSampleBtn" type="button">Load Sample</button>
+      </div>
+      <div class="button-row">
+        <button id="openReviewsBtn" type="button" class="ghost hidden">Open Seller Reviews</button>
+        <button id="crawlGrailedBtn" type="button" class="ghost hidden">Crawl Grailed Reviews</button>
+      </div>
+      <div class="button-row">
+        <button id="toggleAdvancedBtn" type="button" class="ghost">Show Advanced</button>
+        <button id="loadSampleBtn" type="button" class="ghost">Load Sample</button>
       </div>
 
       <p id="pageStatus" class="status">Open a supported listing page, then click Pull From Tab.</p>
 
-      <label for="listingPrice">Current listing price ($)</label>
-      <input id="listingPrice" type="number" min="1" step="1" value="240" />
+      <div id="advancedPanel" class="hidden">
+        <label for="listingPrice">Current listing price ($)</label>
+        <input id="listingPrice" type="number" min="1" step="1" value="240" />
 
-      <label for="retailPrice">Retail fallback ($, optional)</label>
-      <input id="retailPrice" type="number" min="1" step="1" value="320" />
+        <label for="retailPrice">Retail fallback ($, optional)</label>
+        <input id="retailPrice" type="number" min="1" step="1" value="320" />
 
-      <label for="historyInput">Seller history JSON</label>
-      <textarea id="historyInput" spellcheck="false"></textarea>
+        <label for="historyInput">Seller history JSON</label>
+        <textarea id="historyInput" spellcheck="false"></textarea>
 
-      <div class="button-row">
-        <button id="analyzeBtn" type="button">Analyze</button>
-        <button id="clearBtn" type="button" class="ghost">Clear</button>
+        <div class="button-row">
+          <button id="analyzeBtn" type="button">Analyze</button>
+          <button id="clearBtn" type="button" class="ghost">Clear</button>
+        </div>
+
+        <p class="hint">Expected shape: array with <code>listedPrice</code>, <code>soldPrice</code>, optional <code>retailPrice</code>.</p>
       </div>
-
-      <p class="hint">Expected shape: array with <code>listedPrice</code>, <code>soldPrice</code>, optional <code>retailPrice</code>.</p>
     </section>
 
     <section class="panel panel-right">

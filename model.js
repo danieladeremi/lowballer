@@ -1,23 +1,27 @@
 export function computeOfferModel({ listingPrice, retailPrice, sales }) {
-  const anchor = toPositiveNumber(listingPrice) ?? toPositiveNumber(retailPrice);
+  let anchor = toPositiveNumber(listingPrice) ?? toPositiveNumber(retailPrice);
+  if (!anchor && Array.isArray(sales) && sales.length) {
+    const historicalSolds = sales
+      .map((sale) => toPositiveNumber(sale.soldPrice))
+      .filter((value) => Number.isFinite(value));
+    if (historicalSolds.length) {
+      anchor = percentile(historicalSolds, 0.5);
+    }
+  }
+
   if (!anchor) {
-    throw new Error("Add a listing price or retail fallback.");
+    throw new Error("Could not infer anchor price from listing, retail, or seller history.");
   }
 
-  if (!Array.isArray(sales) || sales.length < 3) {
-    throw new Error("Need at least 3 valid sold items.");
-  }
-
-  const ratios = sales
+  const ratiosFromSales = (Array.isArray(sales) ? sales : [])
     .map((sale) => {
       const base = sale.listedPrice ?? sale.retailPrice;
       return base ? sale.soldPrice / base : null;
     })
     .filter((ratio) => Number.isFinite(ratio));
 
-  if (ratios.length < 3) {
-    throw new Error("Not enough sold/listed or sold/retail ratios.");
-  }
+  const usingFallbackRatios = ratiosFromSales.length < 3;
+  const ratios = usingFallbackRatios ? [...DEFAULT_MARKETPLACE_RATIOS] : ratiosFromSales;
 
   const stats = describeRatios(ratios);
   const p10 = percentile(ratios, 0.1);
@@ -30,6 +34,7 @@ export function computeOfferModel({ listingPrice, retailPrice, sales }) {
   return {
     anchor,
     ratios,
+    usedFallbackRatios: usingFallbackRatios,
     stats,
     suggestedOffer: roundDollar(anchor * p70),
     minOffer: roundDollar(anchor * rangeMinRatio),
@@ -88,3 +93,5 @@ function toPositiveNumber(value) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
+
+const DEFAULT_MARKETPLACE_RATIOS = [0.52, 0.6, 0.67, 0.73, 0.8, 0.87];

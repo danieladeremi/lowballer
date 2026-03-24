@@ -7,22 +7,38 @@
     "default_title": "Lowballer",
     "default_popup": "popup.html"
   },
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
   "host_permissions": [
+    "*://grailed.com/*",
     "*://*.grailed.com/*",
+    "*://depop.com/*",
     "*://*.depop.com/*",
+    "*://etsy.com/*",
+    "*://*.etsy.com/*",
+    "*://ebay.com/*",
+    "*://www.ebay.com/*",
     "*://*.ebay.com/*",
-    "*://*.poshmark.com/*",
-    "*://*.mercari.com/*"
+    "*://facebook.com/marketplace/*",
+    "*://www.facebook.com/marketplace/*",
+    "*://m.facebook.com/marketplace/*",
+    "*://*.facebook.com/marketplace/*"
   ],
   "content_scripts": [
     {
       "matches": [
+        "*://grailed.com/*",
         "*://*.grailed.com/*",
+        "*://depop.com/*",
         "*://*.depop.com/*",
+        "*://etsy.com/*",
+        "*://*.etsy.com/*",
+        "*://ebay.com/*",
+        "*://www.ebay.com/*",
         "*://*.ebay.com/*",
-        "*://*.poshmark.com/*",
-        "*://*.mercari.com/*"
+        "*://facebook.com/marketplace/*",
+        "*://www.facebook.com/marketplace/*",
+        "*://m.facebook.com/marketplace/*",
+        "*://*.facebook.com/marketplace/*"
       ],
       "js": ["content-script.js"],
       "run_at": "document_idle"
