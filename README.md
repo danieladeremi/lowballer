@@ -17,6 +17,7 @@ Lowballer estimates a "funny but plausible" lowball offer by modeling seller his
 ## Supported hosts (current manifest)
 
 - `grailed.com` + `*.grailed.com`
+## Things that hopefully will work in the future
 - `depop.com` + `*.depop.com`
 - `etsy.com` + `*.etsy.com`
 - `ebay.com` + `www.ebay.com` + `*.ebay.com`
